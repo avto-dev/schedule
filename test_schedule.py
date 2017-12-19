@@ -67,6 +67,29 @@ class SchedulerTests(unittest.TestCase):
         assert every().day.unit == every().days.unit
         assert every().week.unit == every().weeks.unit
 
+    def test_time_range(self):
+        with mock_datetime(2014, 6, 28, 12, 0):
+            mock_job = make_mock_job()
+
+            # Choose a sample size large enough that it's unlikely the
+            # same value will be chosen each time.
+            minutes = set([
+                every(5).to(30).minutes.do(mock_job).next_run.minute
+                for i in range(100)
+            ])
+
+            assert len(minutes) > 1
+            assert min(minutes) >= 5
+            assert max(minutes) <= 30
+
+    def test_time_range_repr(self):
+        mock_job = make_mock_job()
+
+        with mock_datetime(2014, 6, 28, 12, 0):
+            job_repr = repr(every(5).to(30).minutes.do(mock_job))
+
+        assert job_repr.startswith('Every 5 to 30 minutes do job()')
+
     def test_at_time(self):
         mock_job = make_mock_job()
         assert every().day.at('10:30').do(mock_job).next_run.hour == 10
@@ -299,3 +322,50 @@ class SchedulerTests(unittest.TestCase):
 
         schedule.cancel_job(mj)
         assert len(schedule.jobs) == 0
+
+    def test_cancel_jobs(self):
+        def stop_job():
+            return schedule.CancelJob
+
+        every().second.do(stop_job)
+        every().second.do(stop_job)
+        every().second.do(stop_job)
+        assert len(schedule.jobs) == 3
+
+        schedule.run_all()
+        assert len(schedule.jobs) == 0
+
+    def test_tag_type_enforcement(self):
+        job1 = every().second.do(make_mock_job(name='job1'))
+        self.assertRaises(TypeError, job1.tag, {})
+        self.assertRaises(TypeError, job1.tag, 1, 'a', [])
+        job1.tag(0, 'a', True)
+        assert len(job1.tags) == 3
+
+    def test_clear_by_tag(self):
+        every().second.do(make_mock_job(name='job1')).tag('tag1')
+        every().second.do(make_mock_job(name='job2')).tag('tag1', 'tag2')
+        every().second.do(make_mock_job(name='job3')).tag('tag3', 'tag3',
+                                                          'tag3', 'tag2')
+        assert len(schedule.jobs) == 3
+        schedule.run_all()
+        assert len(schedule.jobs) == 3
+        schedule.clear('tag3')
+        assert len(schedule.jobs) == 2
+        schedule.clear('tag1')
+        assert len(schedule.jobs) == 0
+        every().second.do(make_mock_job(name='job1'))
+        every().second.do(make_mock_job(name='job2'))
+        every().second.do(make_mock_job(name='job3'))
+        schedule.clear()
+        assert len(schedule.jobs) == 0
+
+    def test_misconfigured_job_wont_break_scheduler(self):
+        """
+        Ensure an interrupted job definition chain won't break
+        the scheduler instance permanently.
+        """
+        scheduler = schedule.Scheduler()
+        scheduler.every()
+        scheduler.every(10).seconds
+        scheduler.run_pending()
