@@ -170,6 +170,8 @@ class Job(object):
     method, which also defines its `interval`.
     """
     def __init__(self, interval, scheduler=None):
+        self._with_timestamp_info = False  # pass .last_run and .next_run
+        # to jub_func as keyword arguments on .run()
         self.interval = interval  # pause interval * unit between runs
         self.latest = None  # upper limit to the interval
         self.job_func = None  # the job job_func to run
@@ -391,6 +393,10 @@ class Job(object):
         self.scheduler.jobs.append(self)
         return self
 
+    def with_timestamp_info(self):
+        self._with_timestamp_info = True
+        return self
+
     @property
     def should_run(self):
         """
@@ -405,8 +411,14 @@ class Job(object):
         :return: The return value returned by the `job_func`
         """
         logger.info('Running job %s', self)
+        prev_last_run = self.last_run
         self.last_run = datetime.datetime.now()
-        ret = self.job_func()
+        if self._with_timestamp_info:
+            ret = self.job_func(last_run=prev_last_run,
+                                planned_current_run=self.next_run,
+                                actual_current_run=self.last_run)
+        else:
+            ret = self.job_func()
         self._schedule_next_run()
         return ret
 

@@ -132,6 +132,19 @@ class SchedulerTests(unittest.TestCase):
         schedule.run_all()
         assert mock_job.call_count == 3
 
+    def test_run_all_with_timestamp(self):
+        mock_job = make_mock_job()
+
+        with mock_datetime(2010, 1, 6, 12, 15):
+            every().minute.do(mock_job).with_timestamp_info()
+            schedule.run_all()
+
+            mock_job.assert_called_once_with(
+                last_run=None,
+                planned_current_run=datetime.datetime(2010, 1, 6, 12, 16),
+                actual_current_run=datetime.datetime.now()
+            )
+
     def test_job_func_args_are_passed_on(self):
         mock_job = make_mock_job()
         every().second.do(mock_job, 1, 2, 'three', foo=23, bar={})
@@ -198,6 +211,39 @@ class SchedulerTests(unittest.TestCase):
             mock_job.reset_mock()
             schedule.run_pending()
             assert mock_job.call_count == 4
+
+    def test_run_pending_with_timestamp(self):
+        mock_job = make_mock_job()
+
+        with mock_datetime(2010, 1, 6, 12, 15):
+            every().minute.do(mock_job).with_timestamp_info()
+            schedule.run_pending()
+            assert mock_job.call_count == 0
+
+        with mock_datetime(2010, 1, 6, 12, 16):
+            schedule.run_pending()
+            mock_job.assert_called_once_with(
+                last_run=None,
+                planned_current_run=datetime.datetime.now(),
+                actual_current_run=datetime.datetime.now()
+            )
+
+        with mock_datetime(2010, 1, 6, 12, 17):
+            schedule.run_pending()
+            mock_job.assert_called_with(
+                last_run=datetime.datetime(2010, 1, 6, 12, 16),
+                planned_current_run=datetime.datetime.now(),
+                actual_current_run=datetime.datetime.now()
+            )
+
+        # was not called in several minutes
+        with mock_datetime(2010, 1, 6, 12, 30):
+            schedule.run_pending()
+            mock_job.assert_called_with(
+                last_run=datetime.datetime(2010, 1, 6, 12, 17),
+                planned_current_run=datetime.datetime(2010, 1, 6, 12, 18),
+                actual_current_run=datetime.datetime.now(),
+            )
 
     def test_run_every_weekday_at_specific_time_today(self):
         mock_job = make_mock_job()
