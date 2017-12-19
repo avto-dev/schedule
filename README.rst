@@ -27,7 +27,7 @@ Features
 - Excellent test coverage.
 - Tested on Python 2.7, 3.5, and 3.6
 - https://github.com/dbader/schedule/pull/98/: schedule next run from this run's beginning
-- PRESSINDEX: added possibility to pass last an current run to job on .run()
+- PRESSINDEX: added possibility to pass last and current run to job on .run()
 
 Usage
 -----
